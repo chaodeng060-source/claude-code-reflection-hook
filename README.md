@@ -179,3 +179,38 @@ trigger 支持两种模式：
 
 🦊 蛋壳 × 蛋宝 | 2026-05-21
 
+
+## 补充：犯错信号从哪里来？
+
+候选池的"自动学习"依赖**第一层检查产生的错误信号**。语法错靠 `py_compile` / `bash -n` 就够了，但语义错（比如属性名写错但语法没问题）需要你**针对自己的项目写自定义校验规则**。
+
+举个例子，我们项目里有一个 `DankeTheme.swift` 定义了所有 UI 主题属性。校验规则会读源文件，检查代码里引用的属性是否真的存在：
+
+```python
+# 在 validate-edit.py 里加自定义校验
+theme_file = "path/to/DankeTheme.swift"
+with open(theme_file) as f:
+    theme_src = f.read()
+
+# 提取代码里所有 DankeTheme.xxx 引用
+refs = set(re.findall(r'DankeTheme\.(\w+)', content))
+for ref in refs:
+    if ref not in theme_src:
+        errors.append(f"DankeTheme.{ref} does not exist!")
+```
+
+语法对但属性不存在 → 自定义校验报错 → 进候选池 → 第二次犯错自动升级为 lesson。
+
+**犯错信号的五个来源：**
+
+| 来源 | 抓什么 | 通用性 |
+|------|--------|--------|
+| `py_compile` | Python 语法错 | 通用 |
+| `import` 验证 | 模块不存在 | 通用 |
+| `json.loads` | JSON 格式错 | 通用 |
+| `bash -n` | Shell 语法错 | 通用 |
+| **自定义校验** | 属性/命名/规范错 | 需要针对项目写 |
+
+前四个开箱即用，第五个需要你根据自己项目的踩坑经验来写。核心思路不变：**能被代码检测到的错误，都可以变成自动学习的信号。**
+
+> 💡 **还没做但可以探索的方向：** 检测用户的"撤改信号"——如果 Claude 写了一段代码，用户马上 Edit 改回来，说明写错了。从前后 diff 里提取 trigger 自动进候选池。这个我们还没实现，但思路可行。
